@@ -1,0 +1,22 @@
+<component name="libraryTable">
+  <library name="org.apache.flink:flink-parquet_2.11:1.12.2" type="repository">
+    <properties maven-id="org.apache.flink:flink-parquet_2.11:1.12.2" />
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/flink/flink-parquet_2.11/1.12.2/flink-parquet_2.11-1.12.2.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/parquet/parquet-hadoop/1.11.1/parquet-hadoop-1.11.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/parquet/parquet-column/1.11.1/parquet-column-1.11.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/parquet/parquet-common/1.11.1/parquet-common-1.11.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/yetus/audience-annotations/0.11.0/audience-annotations-0.11.0.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/parquet/parquet-encoding/1.11.1/parquet-encoding-1.11.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/parquet/parquet-format-structures/1.11.1/parquet-format-structures-1.11.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/slf4j/slf4j-api/1.7.22/slf4j-api-1.7.22.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/javax/annotation/javax.annotation-api/1.3.2/javax.annotation-api-1.3.2.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/parquet/parquet-jackson/1.11.1/parquet-jackson-1.11.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/commons-pool/commons-pool/1.6/commons-pool-1.6.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/com/google/code/findbugs/jsr305/1.3.9/jsr305-1.3.9.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/flink/force-shading/1.12.2/force-shading-1.12.2.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
