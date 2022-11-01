@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ScalaCompilerConfiguration">
-    <profile name="Maven 1" modules="kafka-scratch,kafka-to-hdfs">
+    <profile name="Maven 1" modules="flink-scratch,kafka-scratch,kafka-to-hdfs">
       <parameters>
         <parameter value="-nobootcp" />
       </parameters>

@@ -1,0 +1,134 @@
+This failed, I moved the hive uri and hive warehouse strings to .properties, and it worked
+
+package org.wikimedia.kafka2iceberg
+
+import org.apache.flink.api.common.eventtime.WatermarkStrategy
+import org.apache.flink.api.java.utils.ParameterTool
+import org.apache.flink.api.scala.createTypeInformation
+import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
+import org.apache.flink.table.data.{GenericRowData, RowData}
+import org.apache.flink.types.{Row, RowKind}
+import org.apache.hadoop.conf.Configuration
+import org.apache.iceberg.Table
+import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
+import org.apache.iceberg.flink.sink.FlinkSink
+import org.apache.iceberg.flink.{CatalogLoader, TableLoader}
+import org.wikimedia.eventutilities.flink.stream.EventDataStreamFactory
+
+import java.util
+import scala.collection.JavaConverters.{mapAsJavaMapConverter, seqAsJavaListConverter}
+
+object KafkaToIceberg {
+  private val log = org.slf4j.LoggerFactory.getLogger(classOf[Object])
+
+  def main(args: Array[String]): Unit = {
+    val toMerge = ParameterTool.fromArgs(args)
+    val propertyFile = toMerge.get("properties", "default.properties")
+    val parameters = toMerge.mergeWith(ParameterTool.fromPropertiesFile(propertyFile))
+    val props = parameters.getProperties
+
+    val kafkaBootstrapServers = props.getProperty("bootstrap.servers")
+    val kafkaGroupId = props.getProperty("group.id")
+    // database, page_id, rev_id
+    val revisionCreateStreamName = props.getProperty("topics.revision.create")
+    // database, page_id, rev_id, visibility.comment, visibility.text, visibility.user
+    val revisionVisibilityStreamName = props.getProperty("topics.revision.visibility")
+    // database, page_id
+    val pageDeleteStreamName = props.getProperty("topics.page.delete")
+    // database, page_id
+    val pageUndeleteStreamName = props.getProperty("topics.page.undelete")
+
+    val kafkaSourceRoutes = Option(props.getProperty("KAFKA_SOURCE_ROUTES"))
+    val kafkaClientRoutes = Option(props.getProperty("KAFKA_CLIENT_ROUTES"))
+
+    val eventSchemaBaseUris = props.getProperty("EVENT_SCHEMA_BASE_URIS").split(",")
+    val eventStreamConfigUri = props.getProperty("EVENT_STREAM_CONFIG_URI")
+    val kafkaHttpClientRoutes = (kafkaSourceRoutes, kafkaClientRoutes) match {
+      case (Some(source), Some(client)) =>
+        Option(
+          source.split(",")
+            .zip(client.split(","))
+            .toMap.asJava
+        )
+      case _ => None
+    }
+
+    val factory = EventDataStreamFactory.from(
+      eventSchemaBaseUris.toList.asJava,
+      eventStreamConfigUri,
+      kafkaHttpClientRoutes.orNull
+    )
+    val revisionCreateSource = factory.kafkaSourceBuilder(
+      revisionCreateStreamName,
+      kafkaBootstrapServers,
+      kafkaGroupId
+    )
+      .build()
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val revisionCreateStream = env.fromSource(
+      revisionCreateSource,
+      WatermarkStrategy.noWatermarks(),
+      "Revision Create Kafka"
+    )(factory.rowTypeInfo(revisionCreateStreamName))
+
+    val hadoopConf = new Configuration(true)
+    val hiveCatalog = props.getProperty("hive.catalog")
+    val hiveDatabase = props.getProperty("hive.database")
+    val hiveRevisionTable = props.getProperty("hive.table.revision")
+    val catalogProperties = Map(
+      "uri" -> "thrift://analytics-hive.eqiad.wmnet:9083",
+      "warehouse" -> "hdfs://analytics-hadoop/user/hive/warehouse",
+      // probably doesn't need this through the Java API (probably set by the loader)
+      "catalog-type" -> "hive",
+      "type" -> "iceberg",
+      /* NOTE: I can't figure out how to pass these properties, but env variables work:
+      export HIVE_CONF_DIR=/etc/hive/conf
+      export HADOOP_CONF_DIR=/etc/hadoop/conf
+        "hive-conf-dir" -> "/etc/hive/conf",
+        "hadoop-conf-dir" -> "/etc/hadoop/conf",
+       */
+    ).asJava
+
+    val loader = CatalogLoader.hive(
+      hiveCatalog,
+      hadoopConf,
+      catalogProperties,
+    )
+
+    val cat = loader.loadCatalog()
+    cat.listTables(Namespace.empty())
+    log.warn(cat.toString)
+    log.warn(cat.listTables(Namespace.of(hiveDatabase)).toArray.mkString)
+
+    val revisionTableLoader = TableLoader.fromCatalog(loader, TableIdentifier.of(hiveDatabase, hiveRevisionTable))
+
+    /*
+    val tableSchema = TableSchema.builder()
+      .field("database", DataTypes.STRING())
+      .field("page_id", DataTypes.BIGINT())
+      .field("rev_id", DataTypes.BIGINT())
+      .field("is_public", DataTypes.BOOLEAN()())
+      .build()
+     */
+
+    val revisionCreateMapper = (r:Row) => {
+      r.setField(22, true) // is_public
+      GenericRowData.ofKind(RowKind.INSERT,
+        r.getField(3),  // database
+        r.getField(5),  // page_id
+        r.getField(13), // rev_id
+        r.getField(22), // is_public
+
+      ).asInstanceOf[RowData]
+    }
+    val mapped = revisionCreateStream.map(revisionCreateMapper)
+
+    FlinkSink
+      .forRowData(mapped.javaStream)
+      .tableLoader(revisionTableLoader)
+      .append()
+
+    env.execute("Trying Kafka to Iceberg in Flink")
+  }
+}

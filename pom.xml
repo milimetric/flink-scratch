@@ -22,11 +22,11 @@ under the License.
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>data</groupId>
-	<artifactId>kafka-to-hdfs</artifactId>
+	<artifactId>flink-scratch</artifactId>
 	<version>0.1</version>
 	<packaging>jar</packaging>
 
-	<name>Flink Kafka to HDFS</name>
+	<name>Flink Playground</name>
 
 	<repositories>
 		<repository>
@@ -45,12 +45,63 @@ under the License.
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<flink.version>1.15.2</flink.version>
+		<flink.binary.version>1.15</flink.binary.version>
+		<iceberg.version>1.0.0</iceberg.version>
 		<scala.binary.version>2.12</scala.binary.version>
 		<scala.version>2.12.9</scala.version>
 		<log4j.version>2.19.0</log4j.version>
+		<hadoop.version>2.10.2</hadoop.version>
+		<hive.version>2.3.6</hive.version>
+		<snappy.version>1.1.8.4</snappy.version>
 	</properties>
 
 	<dependencies>
+
+		<!-- Event Utilities ! -->
+		<dependency>
+			<groupId>org.wikimedia</groupId>
+			<artifactId>eventutilities</artifactId>
+			<version>1.2.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.wikimedia</groupId>
+			<artifactId>eventutilities-flink</artifactId>
+			<version>1.2.0</version>
+		</dependency>
+
+		<!-- Hadoop Config -->
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-client</artifactId>
+			<version>${hadoop.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-common</artifactId>
+			<version>${hadoop.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-hdfs</artifactId>
+			<version>${hadoop.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-hdfs-client</artifactId>
+			<version>${hadoop.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.xerial.snappy</groupId>
+			<artifactId>snappy-java</artifactId>
+			<version>${snappy.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.hive</groupId>
+			<artifactId>hive-metastore</artifactId>
+			<version>${hive.version}</version>
+		</dependency>
+
 		<!-- Apache Flink dependencies -->
 		<!-- These dependencies are provided, because they should not be packaged into the JAR file. -->
 		<dependency>
@@ -71,6 +122,41 @@ under the License.
 			<version>${flink.version}</version>
 			<scope>provided</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-json</artifactId>
+			<version>${flink.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-table-common</artifactId>
+			<version>${flink.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-table-api-scala-bridge_${scala.binary.version}</artifactId>
+			<version>${flink.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-table-api-scala_${scala.binary.version}</artifactId>
+			<version>${flink.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.iceberg</groupId>
+			<artifactId>iceberg-flink-${flink.binary.version}</artifactId>
+			<version>${iceberg.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.iceberg</groupId>
+			<artifactId>iceberg-hive-metastore</artifactId>
+			<version>${iceberg.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.iceberg</groupId>
+			<artifactId>iceberg-hive-runtime</artifactId>
+			<version>${iceberg.version}</version>
+		</dependency>
 
 		<!-- Scala Library, provided by Flink as well. -->
 		<dependency>
@@ -82,19 +168,15 @@ under the License.
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-connector-kafka</artifactId>
+			<artifactId>flink-connector-files</artifactId>
 			<version>${flink.version}</version>
 		</dependency>
-		<!-- Add connector dependencies here. They must be in the default scope (compile). -->
-
-		<!-- Example:
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
+			<artifactId>flink-connector-kafka</artifactId>
 			<version>${flink.version}</version>
 		</dependency>
-		-->
 
 		<!-- Add logging framework, to produce console output when running in the IDE. -->
 		<!-- These dependencies are excluded from the application JAR by default. -->
@@ -116,6 +198,8 @@ under the License.
 			<version>${log4j.version}</version>
 			<scope>runtime</scope>
 		</dependency>
+
+		<!-- Java -->
 	</dependencies>
 
 	<build>
@@ -156,7 +240,7 @@ under the License.
 							</filters>
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>org.wikimedia.LocalSourceAndSinkJob</mainClass>
+									<mainClass>org.wikimedia.kafka2iceberg.KafkaToIceberg</mainClass>
 								</transformer>
 							</transformers>
 						</configuration>
