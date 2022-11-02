@@ -1,24 +1,16 @@
 package org.wikimedia.kafka2iceberg
 
-import org.apache.flink.api.common.eventtime.WatermarkStrategy
 import org.apache.flink.api.java.utils.ParameterTool
-import org.apache.flink.api.scala.createTypeInformation
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
-import org.apache.flink.table.api.{DataTypes, TableSchema}
-import org.apache.flink.table.data.binary.{BinaryRowData, NestedRowData}
-import org.apache.flink.table.data.columnar.ColumnarRowData
-import org.apache.flink.table.data.{BoxedWrapperRowData, DecimalData, GenericRowData, RowData, StringData}
-import org.apache.flink.table.types.logical.VarCharType
-import org.apache.flink.types.{Row, RowKind}
+import org.apache.flink.table.api.Expressions._
+import org.apache.flink.table.api.{DataTypes, Schema, TableDescriptor}
 import org.apache.hadoop.conf.Configuration
-import org.apache.iceberg.Table
-import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
-import org.apache.iceberg.flink.sink.FlinkSink
-import org.apache.iceberg.flink.{CatalogLoader, TableLoader}
-import org.wikimedia.eventutilities.flink.stream.EventDataStreamFactory
+import org.apache.iceberg.flink.FlinkCatalogFactory
+import org.wikimedia.eventutilities.flink.table.EventTableDescriptorBuilder
+import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
+import org.apache.flink.table.catalog.ObjectPath
 
-import java.util
-import scala.collection.JavaConverters.{mapAsJavaMapConverter, seqAsJavaListConverter}
+import scala.collection.JavaConverters._
 
 object KafkaToIceberg {
   private val log = org.slf4j.LoggerFactory.getLogger(classOf[Object])
@@ -29,94 +21,93 @@ object KafkaToIceberg {
     val parameters = toMerge.mergeWith(ParameterTool.fromPropertiesFile(propertyFile))
     val props = parameters.getProperties
 
-    val kafkaBootstrapServers = props.getProperty("bootstrap.servers")
-    val kafkaGroupId = props.getProperty("group.id")
-    // database, page_id, rev_id
-    val revisionCreateStreamName = props.getProperty("topics.revision.create")
-    // database, page_id, rev_id, visibility.comment, visibility.text, visibility.user
-    val revisionVisibilityStreamName = props.getProperty("topics.revision.visibility")
-    // database, page_id
-    val pageDeleteStreamName = props.getProperty("topics.page.delete")
-    // database, page_id
-    val pageUndeleteStreamName = props.getProperty("topics.page.undelete")
+    val kafkaBootstrapServers = props.getProperty("bootstrap.servers", "kafka-jumbo1007.eqiad.wmnet:9092")
+    val kafkaGroupId = props.getProperty("group.id", "otto_iceberg1")
 
-    val kafkaSourceRoutes = Option(props.getProperty("KAFKA_SOURCE_ROUTES"))
-    val kafkaClientRoutes = Option(props.getProperty("KAFKA_CLIENT_ROUTES"))
-
-    val eventSchemaBaseUris = props.getProperty("EVENT_SCHEMA_BASE_URIS").split(",")
-    val eventStreamConfigUri = props.getProperty("EVENT_STREAM_CONFIG_URI")
-    val kafkaHttpClientRoutes = (kafkaSourceRoutes, kafkaClientRoutes) match {
-      case (Some(source), Some(client)) =>
-        Option(
-          source.split(",")
-            .zip(client.split(","))
-            .toMap.asJava
-        )
-      case _ => None
-    }
-
-    val factory = EventDataStreamFactory.from(
-      eventSchemaBaseUris.toList.asJava,
-      eventStreamConfigUri,
-      kafkaHttpClientRoutes.orNull
-    )
-    val revisionCreateSource = factory.kafkaSourceBuilder(
-      revisionCreateStreamName,
-      kafkaBootstrapServers,
-      kafkaGroupId
-    )
-      .build()
-
-    val env = StreamExecutionEnvironment.getExecutionEnvironment
-    val revisionCreateStream = env.fromSource(
-      revisionCreateSource,
-      WatermarkStrategy.noWatermarks(),
-      "Revision Create Kafka"
-    )(factory.rowTypeInfo(revisionCreateStreamName))
-
-    val hadoopConf = new Configuration(true)
-    hadoopConf.set("fs.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
-
-    val hiveCatalog = props.getProperty("hive.catalog")
-    val hiveDatabase = props.getProperty("hive.database")
-    val hiveRevisionTable = props.getProperty("hive.table.revision")
-    val catalogProperties = Map(
-      "uri" -> props.getProperty("hive.uri"),
-      "warehouse" -> props.getProperty("hive.warehouse"),
-    ).asJava
-
-    val loader = CatalogLoader.hive(
-      hiveCatalog,
-      hadoopConf,
-      catalogProperties,
+    val eventSchemaBaseUris = props.getProperty(
+        "EVENT_SCHEMA_BASE_URIS",
+        "https://schema.wikimedia.org/repositories/primary/jsonschema,https://schema.wikimedia.org/repositories/secondary/jsonschema",
+    ).split(",")
+    val eventStreamConfigUri = props.getProperty(
+        "EVENT_STREAM_CONFIG_URI",
+        "https://meta.wikimedia.org/w/api.php"
     )
 
-    val revisionTableLoader = TableLoader.fromCatalog(loader, TableIdentifier.of(hiveDatabase, hiveRevisionTable))
+      val hadoopConf = new Configuration(true)
+      hadoopConf.set("fs.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
 
-    val revisionCreateMapper = (r:Row) => {
-      val database = "enwiki" // r.getField(3).toString
-      val pageId = 123 // r.getField(5).toString.toLong
-      val revId = 456 // r.getField(13).toString.toLong
-      val isPublic = true
+      val pageCommentTableName = props.getProperty("page_comment_table")
+//      val catalogProperties = Map(
+//          "uri" -> props.getProperty("hive.uri"),
+//          "warehouse" -> props.getProperty("hive.warehouse"),
+//      ).asJava
 
-      val ret = new BoxedWrapperRowData(4)
-      ret.setNonPrimitiveValue(0, database)
-      ret.setLong(1, pageId)
-      ret.setLong(2, revId)
-      ret.setBoolean(3, isPublic)
-      val converted = ret.getRow(0, 4)
-      log.warn(r.toString)
-      log.warn(ret.toString)
-      log.warn(converted.toString)
-      converted
-    }
-    val mapped = revisionCreateStream.map(revisionCreateMapper).javaStream
 
-    FlinkSink
-      .forRowData(mapped)
-      .tableLoader(revisionTableLoader)
-      .append()
+      val env = StreamExecutionEnvironment.getExecutionEnvironment
+      val tableEnv = StreamTableEnvironment.create(env)
 
-    env.execute("Trying Kafka to Iceberg in Flink")
+      val tableDescriptorBuilder = EventTableDescriptorBuilder.from(
+          eventSchemaBaseUris.toList.asJava,
+          eventStreamConfigUri
+      )
+
+      val streamTable = tableEnv.from(
+          tableDescriptorBuilder
+              .eventStream("mediawiki.revision-create")
+              .setupKafka(
+                  kafkaBootstrapServers,
+                  kafkaGroupId
+              )
+              .build()
+      )
+
+      val icebergHiveCatalogProps = Map(
+        "catalog-type" -> "hive",
+        "uri" -> "thrift://analytics-hive.eqiad.wmnet:9083",
+        "hadoop-conf-dir" -> "/etc/hadoop/conf",
+        "hive-conf-dir" -> "/etc/hive/conf",
+        "warehouse" -> "/user/hive/warehouse"
+      )
+
+      val flinkIcebergHiveCatalog = new FlinkCatalogFactory().createCatalog(
+          "analytics_hive", icebergHiveCatalogProps.asJava
+      )
+      tableEnv.registerCatalog("analytics_hive", flinkIcebergHiveCatalog)
+
+
+      val sinkTableName = "analytics_hive.otto." + pageCommentTableName
+
+      if (!flinkIcebergHiveCatalog.tableExists(ObjectPath.fromString(sinkTableName))) {
+          val icebergTableSchema = Schema.newBuilder()
+              .column("wiki_id", DataTypes.STRING().notNull())
+              .column("page_id", DataTypes.BIGINT().notNull())
+              .column("rev_id", DataTypes.BIGINT().notNull())
+              .column("comment", DataTypes.STRING())
+              .primaryKey("wiki_id", "page_id")
+              .build()
+
+          val icebergRevisionTableDescriptor = TableDescriptor
+              .forManaged()
+              .schema(icebergTableSchema)
+              .format("parquet")
+              .option("format-version", "2")
+              .option("write.upsert.enabled", "true")
+              .build()
+
+          tableEnv.createTable(sinkTableName , icebergRevisionTableDescriptor)
+      }
+
+      val selectResult = streamTable.select(
+          $("database").as("wiki_id"),
+          $("page_id"),
+          $("rev_id"),
+          $("comment")
+      )
+
+      val pipeline = selectResult.insertInto(sinkTableName)
+      pipeline.printExplain()
+      pipeline.execute()
+
+
   }
 }

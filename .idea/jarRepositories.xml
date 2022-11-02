@@ -27,6 +27,11 @@
       <option name="url" value="http://repo1.maven.org/maven2" />
     </remote-repository>
     <remote-repository>
+      <option name="id" value="wmf-releases" />
+      <option name="name" value="wmf-releases" />
+      <option name="url" value="https://archiva.wikimedia.org/repository/releases/" />
+    </remote-repository>
+    <remote-repository>
       <option name="id" value="wikimedia.releases" />
       <option name="name" value="Wikimedia Release Repository" />
       <option name="url" value="https://archiva.wikimedia.org/repository/releases" />
