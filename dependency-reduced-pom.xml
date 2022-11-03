@@ -19,7 +19,6 @@
             <configuration>
               <artifactSet>
                 <excludes>
-                  <exclude>org.apache.flink:force-shading</exclude>
                   <exclude>com.google.code.findbugs:jsr305</exclude>
                   <exclude>org.slf4j:*</exclude>
                   <exclude>org.apache.logging.log4j:*</exclude>
@@ -131,9 +130,33 @@
       </exclusions>
     </dependency>
     <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-json</artifactId>
+      <version>1.15.2</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-table-common</artifactId>
+      <version>1.15.2</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>icu4j</artifactId>
+          <groupId>com.ibm.icu</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
       <version>2.12.9</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-connector-files</artifactId>
+      <version>1.15.2</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -159,6 +182,7 @@
     <hive.version>2.3.6</hive.version>
     <flink.version>1.15.2</flink.version>
     <scala.binary.version>2.12</scala.binary.version>
+    <kafka.version>3.3.1</kafka.version>
     <iceberg.version>1.0.0</iceberg.version>
     <log4j.version>2.19.0</log4j.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

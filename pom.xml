@@ -53,9 +53,23 @@ under the License.
 		<hadoop.version>2.10.2</hadoop.version>
 		<hive.version>2.3.6</hive.version>
 		<snappy.version>1.1.8.4</snappy.version>
+		<kafka.version>3.3.1</kafka.version>
 	</properties>
 
 	<dependencies>
+
+		<!-- THIS MUST BE AT THE TOP BECAUSE MAVEN IS <expletive> -->
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-connector-kafka</artifactId>
+			<version>${flink.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-connector-hive_${scala.binary.version}</artifactId>
+			<version>${flink.version}</version>
+		</dependency>
 
 		<!-- Event Utilities ! -->
 		<dependency>
@@ -126,11 +140,13 @@ under the License.
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-json</artifactId>
 			<version>${flink.version}</version>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-table-common</artifactId>
 			<version>${flink.version}</version>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
@@ -145,6 +161,11 @@ under the License.
 		<dependency>
 			<groupId>org.apache.iceberg</groupId>
 			<artifactId>iceberg-flink-${flink.binary.version}</artifactId>
+			<version>${iceberg.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.iceberg</groupId>
+			<artifactId>iceberg-flink-runtime-${flink.binary.version}</artifactId>
 			<version>${iceberg.version}</version>
 		</dependency>
 		<dependency>
@@ -170,12 +191,19 @@ under the License.
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-connector-files</artifactId>
 			<version>${flink.version}</version>
+			<scope>provided</scope>
 		</dependency>
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-connector-kafka</artifactId>
+			<artifactId>flink-sql-connector-hive-2.3.6_2.12</artifactId>
 			<version>${flink.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka-clients</artifactId>
+			<version>${kafka.version}</version>
 		</dependency>
 
 		<!-- Add logging framework, to produce console output when running in the IDE. -->
@@ -220,7 +248,7 @@ under the License.
 						<configuration>
 							<artifactSet>
 								<excludes>
-									<exclude>org.apache.flink:force-shading</exclude>
+									<!--<exclude>org.apache.flink:force-shading</exclude>-->
 									<exclude>com.google.code.findbugs:jsr305</exclude>
 									<exclude>org.slf4j:*</exclude>
 									<exclude>org.apache.logging.log4j:*</exclude>

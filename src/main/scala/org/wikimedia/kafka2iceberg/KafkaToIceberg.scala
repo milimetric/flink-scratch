@@ -3,11 +3,13 @@ package org.wikimedia.kafka2iceberg
 import org.apache.flink.api.common.eventtime.WatermarkStrategy
 import org.apache.flink.api.java.utils.ParameterTool
 import org.apache.flink.api.scala.createTypeInformation
+import org.apache.flink.configuration
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
-import org.apache.flink.table.api.{DataTypes, TableSchema}
+import org.apache.flink.streaming.connectors.kafka.table.KafkaDynamicTableFactory
+import org.apache.flink.table.api.{DataTypes, PlanReference, TableEnvironment, TableSchema}
 import org.apache.flink.table.data.binary.{BinaryRowData, NestedRowData}
 import org.apache.flink.table.data.columnar.ColumnarRowData
-import org.apache.flink.table.data.{BoxedWrapperRowData, DecimalData, GenericRowData, RowData, StringData}
+import org.apache.flink.table.data.{DecimalData, GenericRowData, RowData, StringData}
 import org.apache.flink.table.types.logical.VarCharType
 import org.apache.flink.types.{Row, RowKind}
 import org.apache.hadoop.conf.Configuration
@@ -15,7 +17,11 @@ import org.apache.iceberg.Table
 import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
 import org.apache.iceberg.flink.sink.FlinkSink
 import org.apache.iceberg.flink.{CatalogLoader, TableLoader}
+import org.apache.iceberg.util.JsonUtil.factory
 import org.wikimedia.eventutilities.flink.stream.EventDataStreamFactory
+import org.wikimedia.eventutilities.flink.table.EventTableDescriptorBuilder
+import org.apache.flink.table.api.Expressions._
+import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
 
 import java.util
 import scala.collection.JavaConverters.{mapAsJavaMapConverter, seqAsJavaListConverter}
@@ -55,29 +61,24 @@ object KafkaToIceberg {
       case _ => None
     }
 
-    val factory = EventDataStreamFactory.from(
+    val tableBuilder = EventTableDescriptorBuilder.from(
       eventSchemaBaseUris.toList.asJava,
       eventStreamConfigUri,
-      kafkaHttpClientRoutes.orNull
     )
-    val revisionCreateSource = factory.kafkaSourceBuilder(
-      revisionCreateStreamName,
-      kafkaBootstrapServers,
-      kafkaGroupId
-    )
-      .build()
 
     val env = StreamExecutionEnvironment.getExecutionEnvironment
-    val revisionCreateStream = env.fromSource(
-      revisionCreateSource,
-      WatermarkStrategy.noWatermarks(),
-      "Revision Create Kafka"
-    )(factory.rowTypeInfo(revisionCreateStreamName))
+    val tenv = StreamTableEnvironment.create(env)
+    val revisionCreateTable = tenv.from(
+      tableBuilder
+        .eventStream(revisionCreateStreamName)
+        .setupKafka(kafkaBootstrapServers, kafkaGroupId)
+        .build()
+    )
 
     val hadoopConf = new Configuration(true)
     hadoopConf.set("fs.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
 
-    val hiveCatalog = props.getProperty("hive.catalog")
+    val hiveCatalogName = props.getProperty("hive.catalog")
     val hiveDatabase = props.getProperty("hive.database")
     val hiveRevisionTable = props.getProperty("hive.table.revision")
     val catalogProperties = Map(
@@ -86,37 +87,17 @@ object KafkaToIceberg {
     ).asJava
 
     val loader = CatalogLoader.hive(
-      hiveCatalog,
+      hiveCatalogName,
       hadoopConf,
       catalogProperties,
     )
-
-    val revisionTableLoader = TableLoader.fromCatalog(loader, TableIdentifier.of(hiveDatabase, hiveRevisionTable))
-
-    val revisionCreateMapper = (r:Row) => {
-      val database = "enwiki" // r.getField(3).toString
-      val pageId = 123 // r.getField(5).toString.toLong
-      val revId = 456 // r.getField(13).toString.toLong
-      val isPublic = true
-
-      val ret = new BoxedWrapperRowData(4)
-      ret.setNonPrimitiveValue(0, database)
-      ret.setLong(1, pageId)
-      ret.setLong(2, revId)
-      ret.setBoolean(3, isPublic)
-      val converted = ret.getRow(0, 4)
-      log.warn(r.toString)
-      log.warn(ret.toString)
-      log.warn(converted.toString)
-      converted
-    }
-    val mapped = revisionCreateStream.map(revisionCreateMapper).javaStream
-
+    val revisionIcebergTableLoader = TableLoader.fromCatalog(loader, TableIdentifier.of(hiveDatabase, hiveRevisionTable))
+    // val unifiedRevisionTable = revisionIcebergTableLoader.loadTable()
     FlinkSink
-      .forRowData(mapped)
-      .tableLoader(revisionTableLoader)
+      .forRow(tenv.toDataStream(revisionCreateTable).javaStream, revisionCreateTable.getSchema)
+      .tableLoader(revisionIcebergTableLoader)
       .append()
 
-    env.execute("Trying Kafka to Iceberg in Flink")
+    env.execute()
   }
 }
