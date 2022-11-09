@@ -90,6 +90,10 @@
       <scope>provided</scope>
       <exclusions>
         <exclusion>
+          <artifactId>hadoop-hdfs-client</artifactId>
+          <groupId>org.apache.hadoop</groupId>
+        </exclusion>
+        <exclusion>
           <artifactId>hadoop-mapreduce-client-app</artifactId>
           <groupId>org.apache.hadoop</groupId>
         </exclusion>

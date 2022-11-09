@@ -27,8 +27,19 @@ import org.apache.flink.table.catalog.ObjectPath
 import java.util
 import scala.collection.JavaConverters.{mapAsJavaMapConverter, seqAsJavaListConverter}
 
+/*
+export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
+export HIVE_CONF_DIR=/etc/hive/conf
+export HADOOP_CONF_DIR=/etc/hadoop/conf
+export HBASE_CONF_DIR=/etc/hbase/conf
+./bin/start-cluster.sh
+./bin/flink run --detached ../flink-scratch-0.1.jar --properties ../revisions-to-iceberg.properties
+
+ */
 object KafkaToIceberg {
   private val log = org.slf4j.LoggerFactory.getLogger(classOf[Object])
+
+  log.warn(System.getProperty("java.class.path"))
 
   def main(args: Array[String]): Unit = {
     val toMerge = ParameterTool.fromArgs(args)
@@ -60,6 +71,20 @@ object KafkaToIceberg {
     val hiveWarehouse = props.getProperty("hive.warehouse")
 
     val sinkTableName = props.getProperty("sink.table.name")
+    val catalogName = "analytics_hive"
+
+    val icebergHiveCatalogProps = Map(
+      //"type" -> "iceberg",
+      "catalog-type" -> "hive",
+      "uri" -> hiveUri,
+      "warehouse" -> hiveWarehouse,
+      "hadoop-conf-dir" -> "/etc/hadoop/conf",
+      "hive-conf-dir" -> "/etc/hive/conf",
+    )
+
+    val hadoopConf = new Configuration(true)
+    hadoopConf.set("fs.abstractFileSystem.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
+    hadoopConf.set("fs.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
 
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tableEnv = StreamTableEnvironment.create(env)
@@ -71,6 +96,7 @@ object KafkaToIceberg {
 
     val revisionCreateStreamTable = tableEnv.from(
       tableDescriptorBuilder
+        .option("json.timestamp-format.standard", "ISO-8601")
         .eventStream(revisionCreateStreamName)
         .setupKafka(
           kafkaBootstrapServers,
@@ -79,23 +105,16 @@ object KafkaToIceberg {
         .build()
     )
 
-    val icebergHiveCatalogProps = Map(
-      "catalog-type" -> "hive",
-      "uri" -> hiveUri,
-      "warehouse" -> hiveWarehouse,
-      "hadoop-conf-dir" -> "/etc/hadoop/conf",
-      "hive-conf-dir" -> "/etc/hive/conf",
-    )
-
-    val flinkIcebergHiveCatalog = new FlinkCatalogFactory().createCatalog(
-      "analytics_hive", icebergHiveCatalogProps.asJava
-    )
-    tableEnv.registerCatalog("analytics_hive", flinkIcebergHiveCatalog)
-
+    val flinkTableHiveCatalog = new FlinkCatalogFactory()
+      .createCatalog(
+        catalogName, icebergHiveCatalogProps.asJava
+      )
+    tableEnv.registerCatalog(catalogName, flinkTableHiveCatalog)
 
     val unifiedRevisionTableName = sinkTableName
+    val unifiedRevisionTableNameWithCatalog = catalogName + "." + sinkTableName
 
-    if (!flinkIcebergHiveCatalog.tableExists(ObjectPath.fromString(unifiedRevisionTableName))) {
+    if (!flinkTableHiveCatalog.tableExists(ObjectPath.fromString(unifiedRevisionTableName))) {
       val icebergTableSchema = Schema.newBuilder()
         .column("wiki_id", DataTypes.STRING().notNull())
         .column("page_id", DataTypes.BIGINT().notNull())
@@ -112,7 +131,7 @@ object KafkaToIceberg {
         .option("write.upsert.enabled", "true")
         .build()
 
-      tableEnv.createTable("analytics_hive." + unifiedRevisionTableName , icebergRevisionTableDescriptor)
+      tableEnv.createTable(unifiedRevisionTableNameWithCatalog , icebergRevisionTableDescriptor)
     }
 
     val selectResult = revisionCreateStreamTable.select(
@@ -122,7 +141,7 @@ object KafkaToIceberg {
       $("comment")
     )
 
-    val pipeline = selectResult.insertInto("analytics_hive." + unifiedRevisionTableName)
+    val pipeline = selectResult.insertInto(unifiedRevisionTableNameWithCatalog)
     pipeline.printExplain()
     pipeline.execute()
   }
