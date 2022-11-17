@@ -1,24 +1,10 @@
 package org.wikimedia.kafka2iceberg
 
-import org.apache.flink.api.common.eventtime.WatermarkStrategy
 import org.apache.flink.api.java.utils.ParameterTool
-import org.apache.flink.api.scala.createTypeInformation
-import org.apache.flink.configuration
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
-import org.apache.flink.streaming.connectors.kafka.table.KafkaDynamicTableFactory
-import org.apache.flink.table.api.{DataTypes, PlanReference, Schema, TableDescriptor, TableEnvironment, TableSchema}
-import org.apache.flink.table.data.binary.{BinaryRowData, NestedRowData}
-import org.apache.flink.table.data.columnar.ColumnarRowData
-import org.apache.flink.table.data.{DecimalData, GenericRowData, RowData, StringData}
-import org.apache.flink.table.types.logical.VarCharType
-import org.apache.flink.types.{Row, RowKind}
+import org.apache.flink.table.api.{DataTypes, Schema, TableDescriptor}
 import org.apache.hadoop.conf.Configuration
-import org.apache.iceberg.Table
-import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
-import org.apache.iceberg.flink.sink.FlinkSink
-import org.apache.iceberg.flink.{CatalogLoader, FlinkCatalogFactory, TableLoader}
-import org.apache.iceberg.util.JsonUtil.factory
-import org.wikimedia.eventutilities.flink.stream.EventDataStreamFactory
+import org.apache.iceberg.flink.FlinkCatalogFactory
 import org.wikimedia.eventutilities.flink.table.EventTableDescriptorBuilder
 import org.apache.flink.table.api.Expressions._
 import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
@@ -83,7 +69,7 @@ object KafkaToIceberg {
     )
 
     val hadoopConf = new Configuration(true)
-    hadoopConf.set("fs.abstractFileSystem.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
+    // hadoopConf.set("fs.abstractFileSystem.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
     hadoopConf.set("fs.hdfs.impl", classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
 
     val env = StreamExecutionEnvironment.getExecutionEnvironment
