@@ -13,6 +13,16 @@ import org.apache.flink.table.catalog.ObjectPath
 import java.util
 import scala.collection.JavaConverters.{mapAsJavaMapConverter, seqAsJavaListConverter}
 
+/* NOTES from great search meeting helping me with the build
+# one idea: use yarn instead of standalone cluster
+sudo -u analytics-search kerberos-run-command analytics-search sh -c 'HADOOP_CLASSPATH="`hadoop classpath`" ./bin/yarn-session.sh -tm 2000m -jm 1600m -s 4 -nm "WDQS Streaming Updater (T302396)"'
+
+# use discovery parent pom and all the maven inspection tools from there
+mvn sortpom:sort
+mvn clean verify
+mvn dependency:tree
+ */
+
 /*
 export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
 export HIVE_CONF_DIR=/etc/hive/conf
