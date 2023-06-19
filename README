@@ -1,0 +1,34 @@
+tar xvzf flink-1.16.2-bin-scala_2.12.tgz
+vim revisions-to-iceberg.properties
+
+<code>
+bootstrap.servers=kafka-jumbo1001.eqiad.wmnet:9092
+group.id=test-kafka-iceberg 
+
+EVENT_SCHEMA_BASE_URIS=https://schema.wikimedia.org/repositories/primary/jsonschema,\
+  https://schema.wikimedia.org/repositories/secondary/jsonschema
+EVENT_STREAM_CONFIG_URI=https://meta.wikimedia.org/w/api.php
+#KAFKA_SOURCE_ROUTES=https://meta.wikimedia.org
+#KAFKA_CLIENT_ROUTES=https://api-ro.wikimedia.org 
+
+topics.revision.create=mediawiki.revision-create
+topics.revision.visibility=mediawiki.revision-visibility-change
+topics.page.delete=mediawiki.page-delete
+topics.page.undelete=mediawiki.page-undelete
+
+hive.uri=thrift://analytics-hive.eqiad.wmnet:9083
+hive.warehouse=/user/hive/warehouse
+hive.catalog=hive_iceberg_catalog
+hive.database=from_kafka
+hive.table.revision=revision
+
+output.path=/home/milimetric/kafka-revisions
+sink.table.name=milimetric.unified_revision
+</code>
+
+export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
+export HIVE_CONF_DIR=/etc/hive/conf
+export HADOOP_CONF_DIR=/etc/hadoop/conf
+export HBASE_CONF_DIR=/etc/hbase/conf
+
+./bin/flink run --detached ../flink-scratch-0.1-shaded.jar --properties ../revisions-to-iceberg.properties
